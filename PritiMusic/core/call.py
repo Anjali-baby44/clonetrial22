@@ -86,11 +86,11 @@ async def _clear_(chat_id):
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
 
-# 🛑 HELPER TO FIX THE NoneType ERROR IN NEW PYTGCALLS
-def create_stream(file_path, is_video=False, ffmpeg_params=None):
+# 🛑 HELPER TO CREATE STREAM
+def create_stream(file_path, is_video=False, video_q=VideoQuality.HD_720p, ffmpeg_params=None):
     kwargs = {"audio_parameters": AudioQuality.HIGH}
     if is_video:
-        kwargs["video_parameters"] = VideoQuality.MEDIUM
+        kwargs["video_parameters"] = video_q
     if ffmpeg_params:
         kwargs["ffmpeg_parameters"] = ffmpeg_params
     return MediaStream(file_path, **kwargs)
@@ -107,6 +107,24 @@ class Call(PyTgCalls):
         self.one = PyTgCalls(self.userbot1)
         self.custom_assistants = {} 
         self.active_clients = {} 
+
+    # 🟢 720p TO 480p ANTI-CRASH FALLBACK 🟢
+    async def _play_safe(self, client, chat_id, file_path, is_video=False, ffmpeg_params=None):
+        try:
+            # Try with 720p first
+            stream = create_stream(file_path, is_video, VideoQuality.HD_720p, ffmpeg_params)
+            await client.play(chat_id, stream)
+        except Exception as e:
+            if is_video:
+                try:
+                    # If 720p fails, fallback to 480p automatically without crashing
+                    LOGGER(__name__).warning(f"720p Failed for {chat_id}, falling back to 480p.")
+                    stream_fallback = create_stream(file_path, is_video, VideoQuality.SD_480p, ffmpeg_params)
+                    await client.play(chat_id, stream_fallback)
+                except Exception as fallback_err:
+                    raise fallback_err
+            else:
+                raise e
 
     async def get_active_clients(self, chat_id):
         clients = []
@@ -210,12 +228,10 @@ class Call(PyTgCalls):
         played, con_seconds = speed_converter(playing[0]["played"], speed)
         duration = seconds_to_min(dur)
         
-        stream = create_stream(out, playing[0]["streamtype"] == "video", f"-ss {played} -to {duration}")
-
         if str(db[chat_id][0]["file"]) == str(file_path):
             for assistant in assistants:
                 try:
-                    await assistant.play(chat_id, stream)
+                    await self._play_safe(assistant, chat_id, out, playing[0]["streamtype"] == "video", f"-ss {played} -to {duration}")
                 except:
                     pass
         else:
@@ -233,28 +249,23 @@ class Call(PyTgCalls):
 
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
-        stream = create_stream(link, video)
         for assistant in assistants:
             try:
-                await assistant.play(chat_id, stream)
+                await self._play_safe(assistant, chat_id, link, video)
             except Exception as e:
                 pass
 
     async def seek_stream(self, chat_id, file_path, to_seek, duration, mode):
         assistants = await self.get_active_clients(chat_id)
-        stream = create_stream(file_path, mode == "video", f"-ss {to_seek} -to {duration}")
         for assistant in assistants:
             try:
-                await assistant.play(chat_id, stream)
+                await self._play_safe(assistant, chat_id, file_path, mode == "video", f"-ss {to_seek} -to {duration}")
             except:
                 pass
 
     async def stream_call(self, link):
         assistant = await group_assistant(self, config.LOGGER_ID)
-        await assistant.play(
-            config.LOGGER_ID,
-            MediaStream(link, audio_parameters=AudioQuality.HIGH)
-        )
+        await self._play_safe(assistant, config.LOGGER_ID, link, False)
         await asyncio.sleep(0.2)
         await assistant.leave_group_call(config.LOGGER_ID)
 
@@ -290,10 +301,8 @@ class Call(PyTgCalls):
         language = await get_lang(chat_id)
         _ = get_string(language)
         
-        stream = create_stream(link, video)
-        
         try:
-            await assistant_to_join.play(chat_id, stream)
+            await self._play_safe(assistant_to_join, chat_id, link, video)
         except NoActiveGroupCall:
             raise AssistantErr(_["call_8"])
         except Exception as e:
@@ -502,8 +511,7 @@ class Call(PyTgCalls):
                 n, link = await YouTube.video(videoid, True)
                 if n == 0: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
-                stream = create_stream(link, video)
-                try: await client.play(chat_id, stream)
+                try: await self._play_safe(client, chat_id, link, video)
                 except Exception: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
                 button = telegram_markup(_, chat_id)
@@ -532,9 +540,7 @@ class Call(PyTgCalls):
                     except Exception: pass
                     return await self.change_stream(client, chat_id)
 
-                stream = create_stream(file_path, video)
-                
-                try: await client.play(chat_id, stream)
+                try: await self._play_safe(client, chat_id, file_path, video)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
                 img = await get_thumb(videoid, user_id, chat_client)
@@ -552,9 +558,9 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "stream"
                 
             elif "index_" in queued:
-                stream = create_stream(videoid, video)
-                try: await client.play(chat_id, stream)
+                try: await self._play_safe(client, chat_id, videoid, video)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
+                
                 button = telegram_markup(_, chat_id)
                 run = await chat_client.send_photo(
                     chat_id=original_chat_id, photo=get_random_img(config.STREAM_IMG_URL),
@@ -564,8 +570,7 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "tg"
                 
             else:
-                stream = create_stream(queued, video)
-                try: await client.play(chat_id, stream)
+                try: await self._play_safe(client, chat_id, queued, video)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
                 if videoid == "telegram":
