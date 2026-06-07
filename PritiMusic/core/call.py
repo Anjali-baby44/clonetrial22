@@ -9,11 +9,11 @@ from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
-# === NEW PYTGCALLS (v2.x) IMPORTS ===
+# === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
 from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
-from pytgcalls.types.stream import StreamAudioEnded
+# Removed StreamAudioEnded as it is deprecated in newer versions
 
 import config
 from PritiMusic import LOGGER, YouTube, app
@@ -283,11 +283,12 @@ class Call(PyTgCalls):
             else:
                 assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
+                
                 @assistant_to_join.on_stream_end()
                 async def stream_end_handler(client, update: Update):
-                    if not isinstance(update, StreamAudioEnded):
-                        return
+                    # In newer PyTgCalls versions, the decorator handles the check
                     await self.change_stream(client, update.chat_id)
+                    
                 @assistant_to_join.on_kicked()
                 @assistant_to_join.on_closed_voice_chat()
                 @assistant_to_join.on_left()
@@ -638,7 +639,7 @@ class Call(PyTgCalls):
 
         @self.one.on_stream_end()
         async def stream_end_handler1(client, update: Update):
-            if not isinstance(update, StreamAudioEnded): return
+            # In newer PyTgCalls versions, the decorator handles the check
             await self.change_stream(client, update.chat_id)
 
 Lucky = Call()
