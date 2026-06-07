@@ -9,7 +9,7 @@ from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
-# === PYTGCALLS IMPORTS ===
+# === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
 from pytgcalls import PyTgCalls, filters
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
@@ -106,7 +106,7 @@ class Call(PyTgCalls):
         )
         self.one = PyTgCalls(self.userbot1)
         self.custom_assistants = {} 
-        self.active_clients = {}
+        self.active_clients = {} 
 
     # 🟢 720p TO 480p ANTI-CRASH FALLBACK 🟢
     async def _play_safe(self, client, chat_id, file_path, is_video=False, ffmpeg_params=None):
@@ -156,7 +156,9 @@ class Call(PyTgCalls):
             except:
                 pass
 
+    # 🛑 DEBUG LOGS ADDED HERE
     async def stop_stream(self, chat_id: int, assistant_type=None):
+        LOGGER(__name__).info(f"Stopping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
         try:
             await _clear_(chat_id)
@@ -165,12 +167,13 @@ class Call(PyTgCalls):
         for assistant in assistants:
             try:
                 await assistant.leave_group_call(chat_id)
-            except:
-                pass
+            except Exception as e:
+                LOGGER(__name__).error(f"Error stopping stream in chat {chat_id}: {e}")
         if chat_id in self.active_clients:
             del self.active_clients[chat_id]
 
     async def stop_stream_force(self, chat_id: int):
+        LOGGER(__name__).info(f"Force stopping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try:
@@ -245,13 +248,15 @@ class Call(PyTgCalls):
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
 
+    # 🛑 DEBUG LOGS ADDED HERE
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
+        LOGGER(__name__).info(f"Skipping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try:
                 await self._play_safe(assistant, chat_id, link, video)
             except Exception as e:
-                pass
+                LOGGER(__name__).error(f"Error skipping stream in chat {chat_id}: {e}")
 
     async def seek_stream(self, chat_id, file_path, to_seek, duration, mode):
         assistants = await self.get_active_clients(chat_id)
