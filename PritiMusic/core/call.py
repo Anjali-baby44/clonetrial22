@@ -86,6 +86,15 @@ async def _clear_(chat_id):
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
 
+# 🛑 HELPER TO FIX THE NoneType ERROR IN NEW PYTGCALLS
+def create_stream(file_path, is_video=False, ffmpeg_params=None):
+    kwargs = {"audio_parameters": AudioQuality.HIGH}
+    if is_video:
+        kwargs["video_parameters"] = VideoQuality.MEDIUM
+    if ffmpeg_params:
+        kwargs["ffmpeg_parameters"] = ffmpeg_params
+    return MediaStream(file_path, **kwargs)
+
 
 class Call(PyTgCalls):
     def __init__(self):
@@ -201,12 +210,7 @@ class Call(PyTgCalls):
         played, con_seconds = speed_converter(playing[0]["played"], speed)
         duration = seconds_to_min(dur)
         
-        stream = MediaStream(
-            out,
-            audio_parameters=AudioQuality.HIGH,
-            video_parameters=VideoQuality.MEDIUM if playing[0]["streamtype"] == "video" else None,
-            ffmpeg_parameters=f"-ss {played} -to {duration}"
-        )
+        stream = create_stream(out, playing[0]["streamtype"] == "video", f"-ss {played} -to {duration}")
 
         if str(db[chat_id][0]["file"]) == str(file_path):
             for assistant in assistants:
@@ -229,11 +233,7 @@ class Call(PyTgCalls):
 
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
-        stream = MediaStream(
-            link,
-            audio_parameters=AudioQuality.HIGH,
-            video_parameters=VideoQuality.MEDIUM if video else None
-        )
+        stream = create_stream(link, video)
         for assistant in assistants:
             try:
                 await assistant.play(chat_id, stream)
@@ -242,12 +242,7 @@ class Call(PyTgCalls):
 
     async def seek_stream(self, chat_id, file_path, to_seek, duration, mode):
         assistants = await self.get_active_clients(chat_id)
-        stream = MediaStream(
-            file_path,
-            audio_parameters=AudioQuality.HIGH,
-            video_parameters=VideoQuality.MEDIUM if mode == "video" else None,
-            ffmpeg_parameters=f"-ss {to_seek} -to {duration}"
-        )
+        stream = create_stream(file_path, mode == "video", f"-ss {to_seek} -to {duration}")
         for assistant in assistants:
             try:
                 await assistant.play(chat_id, stream)
@@ -280,7 +275,6 @@ class Call(PyTgCalls):
                 assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
                 
-                # 🛑 NEW V2 UPDATE HANDLER FOR STREAM END
                 @assistant_to_join.on_update(filters.stream_end)
                 async def stream_end_handler(client, update: Update):
                     await self.change_stream(client, update.chat_id)
@@ -296,11 +290,7 @@ class Call(PyTgCalls):
         language = await get_lang(chat_id)
         _ = get_string(language)
         
-        stream = MediaStream(
-            link,
-            audio_parameters=AudioQuality.HIGH,
-            video_parameters=VideoQuality.MEDIUM if video else None
-        )
+        stream = create_stream(link, video)
         
         try:
             await assistant_to_join.play(chat_id, stream)
@@ -512,7 +502,7 @@ class Call(PyTgCalls):
                 n, link = await YouTube.video(videoid, True)
                 if n == 0: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
-                stream = MediaStream(link, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                stream = create_stream(link, video)
                 try: await client.play(chat_id, stream)
                 except Exception: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
@@ -542,7 +532,7 @@ class Call(PyTgCalls):
                     except Exception: pass
                     return await self.change_stream(client, chat_id)
 
-                stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                stream = create_stream(file_path, video)
                 
                 try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
@@ -562,7 +552,7 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "stream"
                 
             elif "index_" in queued:
-                stream = MediaStream(videoid, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                stream = create_stream(videoid, video)
                 try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 button = telegram_markup(_, chat_id)
@@ -574,7 +564,7 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "tg"
                 
             else:
-                stream = MediaStream(queued, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                stream = create_stream(queued, video)
                 try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
@@ -621,7 +611,6 @@ class Call(PyTgCalls):
         if config.STRING1: await self.one.start()
 
     async def decorators(self):
-        # 🛑 NEW V2 UPDATE HANDLER FOR STREAM END
         @self.one.on_update(filters.stream_end)
         async def stream_end_handler1(client, update: Update):
             await self.change_stream(client, update.chat_id)
