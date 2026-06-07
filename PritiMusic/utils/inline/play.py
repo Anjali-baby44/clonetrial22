@@ -1,7 +1,17 @@
-import math
-from config import SUPPORT_CHAT, OWNER_USERNAME
-from PritiMusic import app
+import asyncio
+import random
+import string
+import re
+import unicodedata
+import urllib.parse 
+from urllib.parse import urlparse, unquote
+
+from pyrogram import filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, Message
+from pytgcalls.exceptions import NoActiveGroupCall
+
 import config
+from PritiMusic import app
 from PritiMusic.utils.formatters import time_to_seconds
 
 # Import Pyrogram types
@@ -28,6 +38,38 @@ def add_me_button():
     )
 
 
+# 🟢 NEW: VIDEO QUALITY SELECTION KEYBOARD 🟢
+def vplay_quality_markup(_, videoid, user_id, channel, fplay):
+    buttons = [
+        [
+            styled_button(
+                text="SD - 360p", 
+                callback_data=f"VPlay {videoid}|{user_id}|360|{channel}|{fplay}", 
+                style=ButtonStyle.PRIMARY
+            ),
+            styled_button(
+                text="HQ - 480p", 
+                callback_data=f"VPlay {videoid}|{user_id}|480|{channel}|{fplay}", 
+                style=ButtonStyle.PRIMARY
+            ),
+            styled_button(
+                text="HD - 720p", 
+                callback_data=f"VPlay {videoid}|{user_id}|720|{channel}|{fplay}", 
+                style=ButtonStyle.PRIMARY
+            ),
+        ],
+        [clone_button()],
+        [
+            styled_button(
+                text=_["CLOSE_BUTTON"], 
+                callback_data=f"forceclose {videoid}|{user_id}", 
+                style=ButtonStyle.DANGER
+            )
+        ]
+    ]
+    return buttons
+
+
 def track_markup(_, videoid, user_id, channel, fplay):
     buttons = [
         [
@@ -36,9 +78,10 @@ def track_markup(_, videoid, user_id, channel, fplay):
                 callback_data=f"MusicStream {videoid}|{user_id}|a|{channel}|{fplay}",
                 style=ButtonStyle.SUCCESS
             ),
+            # 🔄 Changed Video button to trigger Quality Selection
             styled_button(
                 text=_["P_B_2"],
-                callback_data=f"MusicStream {videoid}|{user_id}|v|{channel}|{fplay}",
+                callback_data=f"VidSelect {videoid}|{user_id}|v|{channel}|{fplay}",
                 style=ButtonStyle.SUCCESS
             ),
         ],
@@ -163,9 +206,10 @@ def slider_markup(_, videoid, user_id, query, query_type, channel, fplay):
                 callback_data=f"MusicStream {videoid}|{user_id}|a|{channel}|{fplay}",
                 style=ButtonStyle.SUCCESS
             ),
+            # 🔄 Changed Video button to trigger Quality Selection
             styled_button(
                 text=_["P_B_2"],
-                callback_data=f"MusicStream {videoid}|{user_id}|v|{channel}|{fplay}",
+                callback_data=f"VidSelect {videoid}|{user_id}|v|{channel}|{fplay}",
                 style=ButtonStyle.SUCCESS
             ),
         ],
