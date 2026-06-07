@@ -86,13 +86,24 @@ async def _clear_(chat_id):
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
 
-# 🛑 HELPER TO CREATE STREAM
-def create_stream(file_path, is_video=False, video_q=VideoQuality.HD_720p, ffmpeg_params=None):
+# 🛑 HELPER TO CREATE STREAM WITH 1080p & 1440p SUPPORT
+def create_stream(file_path, is_video=False, default_q=VideoQuality.HD_720p, ffmpeg_params=None):
     kwargs = {"audio_parameters": AudioQuality.HIGH}
+    
     if is_video:
-        kwargs["video_parameters"] = video_q
+        v_qual = default_q
+        # Check user requested quality and apply PyTgCalls Enum
+        if str(is_video) == "360": v_qual = VideoQuality.SD_360p
+        elif str(is_video) == "480": v_qual = VideoQuality.SD_480p
+        elif str(is_video) == "720": v_qual = VideoQuality.HD_720p
+        elif str(is_video) == "1080": v_qual = VideoQuality.FHD_1080p
+        elif str(is_video) == "1440": v_qual = VideoQuality.QHD_1440p
+            
+        kwargs["video_parameters"] = v_qual
+        
     if ffmpeg_params:
         kwargs["ffmpeg_parameters"] = ffmpeg_params
+        
     return MediaStream(file_path, **kwargs)
 
 
@@ -108,7 +119,7 @@ class Call(PyTgCalls):
         self.custom_assistants = {} 
         self.active_clients = {} 
 
-    # 🟢 720p TO 480p ANTI-CRASH FALLBACK 🟢
+    # 🟢 HIGH QUALITY TO 480p ANTI-CRASH FALLBACK 🟢
     async def _play_safe(self, client, chat_id, file_path, is_video=False, ffmpeg_params=None):
         try:
             stream = create_stream(file_path, is_video, VideoQuality.HD_720p, ffmpeg_params)
@@ -116,8 +127,9 @@ class Call(PyTgCalls):
         except Exception as e:
             if is_video:
                 try:
-                    LOGGER(__name__).warning(f"720p Failed for {chat_id}, falling back to 480p.")
-                    stream_fallback = create_stream(file_path, is_video, VideoQuality.SD_480p, ffmpeg_params)
+                    LOGGER(__name__).warning(f"High Quality Failed for {chat_id}, falling back to 480p safe mode.")
+                    # Agar 1080p/1440p fail hua due to network, force fallback to 480p
+                    stream_fallback = create_stream(file_path, "480", VideoQuality.SD_480p, ffmpeg_params)
                     await client.play(chat_id, stream_fallback)
                 except Exception as fallback_err:
                     raise fallback_err
