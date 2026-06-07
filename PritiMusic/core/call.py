@@ -9,7 +9,7 @@ from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
-# === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
+# === PYTGCALLS IMPORTS ===
 from pytgcalls import PyTgCalls, filters
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
@@ -106,18 +106,16 @@ class Call(PyTgCalls):
         )
         self.one = PyTgCalls(self.userbot1)
         self.custom_assistants = {} 
-        self.active_clients = {} 
+        self.active_clients = {}
 
     # 🟢 720p TO 480p ANTI-CRASH FALLBACK 🟢
     async def _play_safe(self, client, chat_id, file_path, is_video=False, ffmpeg_params=None):
         try:
-            # Try with 720p first
             stream = create_stream(file_path, is_video, VideoQuality.HD_720p, ffmpeg_params)
             await client.play(chat_id, stream)
         except Exception as e:
             if is_video:
                 try:
-                    # If 720p fails, fallback to 480p automatically without crashing
                     LOGGER(__name__).warning(f"720p Failed for {chat_id}, falling back to 480p.")
                     stream_fallback = create_stream(file_path, is_video, VideoQuality.SD_480p, ffmpeg_params)
                     await client.play(chat_id, stream_fallback)
