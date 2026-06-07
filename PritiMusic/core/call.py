@@ -10,7 +10,8 @@ from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
 # === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
-from pytgcalls import PyTgCalls, filters
+# 🛑 Removed 'filters' because of PyTgCalls internal bug
+from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 
@@ -92,7 +93,6 @@ def create_stream(file_path, is_video=False, default_q=VideoQuality.HD_720p, ffm
     
     if is_video:
         v_qual = default_q
-        # Check user requested quality and apply PyTgCalls Enum
         if str(is_video) == "360": v_qual = VideoQuality.SD_360p
         elif str(is_video) == "480": v_qual = VideoQuality.SD_480p
         elif str(is_video) == "720": v_qual = VideoQuality.HD_720p
@@ -128,7 +128,6 @@ class Call(PyTgCalls):
             if is_video:
                 try:
                     LOGGER(__name__).warning(f"High Quality Failed for {chat_id}, falling back to 480p safe mode.")
-                    # Agar 1080p/1440p fail hua due to network, force fallback to 480p
                     stream_fallback = create_stream(file_path, "480", VideoQuality.SD_480p, ffmpeg_params)
                     await client.play(chat_id, stream_fallback)
                 except Exception as fallback_err:
@@ -168,7 +167,6 @@ class Call(PyTgCalls):
             except:
                 pass
 
-    # 🛑 DEBUG LOGS ADDED HERE
     async def stop_stream(self, chat_id: int, assistant_type=None):
         LOGGER(__name__).info(f"Stopping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
@@ -260,7 +258,6 @@ class Call(PyTgCalls):
             db[chat_id][0]["speed_path"] = out
             db[chat_id][0]["speed"] = speed
 
-    # 🛑 DEBUG LOGS ADDED HERE
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         LOGGER(__name__).info(f"Skipping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
@@ -301,9 +298,15 @@ class Call(PyTgCalls):
                 assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
                 
-                @assistant_to_join.on_update(filters.stream_end)
+                # 🛑 MANUAL FILTER: PyTgCalls ka internal bug bypass karne ke liye
+                @assistant_to_join.on_update()
                 async def stream_end_handler(client, update: Update):
-                    await self.change_stream(client, update.chat_id)
+                    update_name = type(update).__name__
+                    if any(x in update_name for x in ["StreamAudioEnded", "StreamVideoEnded", "StreamEnd"]):
+                        try:
+                            await self.change_stream(client, update.chat_id)
+                        except Exception as e:
+                            LOGGER(__name__).error(f"Stream change failed: {e}")
                     
                 self.custom_assistants[user_id] = assistant_to_join
         else:
@@ -631,8 +634,14 @@ class Call(PyTgCalls):
         if config.STRING1: await self.one.start()
 
     async def decorators(self):
-        @self.one.on_update(filters.stream_end)
+        # 🛑 MANUAL FILTER: PyTgCalls ka internal bug bypass karne ke liye
+        @self.one.on_update()
         async def stream_end_handler1(client, update: Update):
-            await self.change_stream(client, update.chat_id)
+            update_name = type(update).__name__
+            if any(x in update_name for x in ["StreamAudioEnded", "StreamVideoEnded", "StreamEnd"]):
+                try:
+                    await self.change_stream(client, update.chat_id)
+                except Exception as e:
+                    LOGGER(__name__).error(f"Stream change failed: {e}")
 
 Lucky = Call()
