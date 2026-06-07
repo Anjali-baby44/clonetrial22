@@ -1,17 +1,7 @@
-import asyncio
-import random
-import string
-import re
-import unicodedata
-import urllib.parse 
-from urllib.parse import urlparse, unquote
-
-from pyrogram import filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, Message
-from pytgcalls.exceptions import NoActiveGroupCall
-
-import config
+import math
+from config import SUPPORT_CHAT, OWNER_USERNAME
 from PritiMusic import app
+import config
 from PritiMusic.utils.formatters import time_to_seconds
 
 # Import Pyrogram types
@@ -38,7 +28,7 @@ def add_me_button():
     )
 
 
-# 🟢 NEW: VIDEO QUALITY SELECTION KEYBOARD 🟢
+# 🟢 NEW: VIDEO QUALITY SELECTION KEYBOARD WITH 1080p & 1440p 🟢
 def vplay_quality_markup(_, videoid, user_id, channel, fplay):
     buttons = [
         [
@@ -55,6 +45,18 @@ def vplay_quality_markup(_, videoid, user_id, channel, fplay):
             styled_button(
                 text="HD - 720p", 
                 callback_data=f"VPlay {videoid}|{user_id}|720|{channel}|{fplay}", 
+                style=ButtonStyle.PRIMARY
+            ),
+        ],
+        [
+            styled_button(
+                text="FHD - 1080p", 
+                callback_data=f"VPlay {videoid}|{user_id}|1080|{channel}|{fplay}", 
+                style=ButtonStyle.PRIMARY
+            ),
+            styled_button(
+                text="2K - 1440p", 
+                callback_data=f"VPlay {videoid}|{user_id}|1440|{channel}|{fplay}", 
                 style=ButtonStyle.PRIMARY
             ),
         ],
