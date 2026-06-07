@@ -1,6 +1,9 @@
+asyncio
+pyrofork
 gTTS
 aiofiles
 aiohttp
+ffmpeg
 beautifulsoup4
 dnspython
 ffmpeg-python
@@ -15,6 +18,7 @@ pytz
 pillow==9.5.0
 psutil
 py-tgcalls>=2.0.0
+pykeyboard
 python-dotenv
 pyyaml
 requests
