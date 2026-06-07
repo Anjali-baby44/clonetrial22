@@ -10,7 +10,7 @@ from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
 # === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
-from pytgcalls import PyTgCalls
+from pytgcalls import PyTgCalls, filters
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 
@@ -43,13 +43,10 @@ def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg)
     
-    # In common errors ko ignore karega taaki bot hang na ho
     if "GROUPCALL_FORBIDDEN" in msg_str or "SetVideoCallStatus" in msg_str or "GROUPCALL_INVALID" in msg_str:
         pass 
     else:
         logging.getLogger("asyncio").error(f"Unhandled Asyncio Error: {msg}")
-        
-        # 🟢 YAHAN SE ERROR LOGGER GROUP MEIN JAYEGA 🟢
         from PritiMusic import app
         import config
         try:
@@ -283,7 +280,8 @@ class Call(PyTgCalls):
                 assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
                 
-                @assistant_to_join.on_stream_end()
+                # 🛑 NEW V2 UPDATE HANDLER FOR STREAM END
+                @assistant_to_join.on_update(filters.stream_end)
                 async def stream_end_handler(client, update: Update):
                     await self.change_stream(client, update.chat_id)
                     
@@ -623,7 +621,8 @@ class Call(PyTgCalls):
         if config.STRING1: await self.one.start()
 
     async def decorators(self):
-        @self.one.on_stream_end()
+        # 🛑 NEW V2 UPDATE HANDLER FOR STREAM END
+        @self.one.on_update(filters.stream_end)
         async def stream_end_handler1(client, update: Update):
             await self.change_stream(client, update.chat_id)
 
