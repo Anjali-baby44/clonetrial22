@@ -7,17 +7,17 @@ from typing import Union
 
 from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
-from pytgcalls import PyTgCalls, StreamType
+from pyrogram.enums import ParseMode
+
+# === NEW PYTGCALLS (v2.x) IMPORTS ===
+from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
     NoActiveGroupCall,
     TelegramServerError,
 )
-from pytgcalls.types import Update
-from pytgcalls.types.input_stream import AudioPiped, AudioVideoPiped
-from pytgcalls.types.input_stream.quality import HighQualityAudio, MediumQualityVideo
+from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 from pytgcalls.types.stream import StreamAudioEnded
-from pyrogram.enums import ParseMode
 
 import config
 from PritiMusic import LOGGER, YouTube, app
@@ -47,7 +47,6 @@ from PritiMusic.utils.thumbnails import get_thumb
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg)
-    # Ignore stale voice chat errors to keep clones running
     if "GROUPCALL_FORBIDDEN" in msg_str or "SetVideoCallStatus" in msg_str or "GROUPCALL_INVALID" in msg_str:
         pass 
     else:
@@ -89,10 +88,8 @@ class Call(PyTgCalls):
             api_hash=config.API_HASH,
             session_string=str(config.STRING1),
         )
-        self.one = PyTgCalls(
-            self.userbot1,
-            cache_duration=100,
-        )
+        # Naya init tarika: No cache_duration
+        self.one = PyTgCalls(self.userbot1)
         self.custom_assistants = {} 
         self.active_clients = {} 
 
@@ -197,24 +194,19 @@ class Call(PyTgCalls):
         dur = int(dur)
         played, con_seconds = speed_converter(playing[0]["played"], speed)
         duration = seconds_to_min(dur)
-        stream = (
-            AudioVideoPiped(
-                out,
-                audio_parameters=HighQualityAudio(),
-                video_parameters=MediumQualityVideo(),
-                additional_ffmpeg_parameters=f"-ss {played} -to {duration}",
-            )
-            if playing[0]["streamtype"] == "video"
-            else AudioPiped(
-                out,
-                audio_parameters=HighQualityAudio(),
-                additional_ffmpeg_parameters=f"-ss {played} -to {duration}",
-            )
+        
+        # New MediaStream usage
+        stream = MediaStream(
+            out,
+            audio_parameters=AudioQuality.HIGH,
+            video_parameters=VideoQuality.MEDIUM if playing[0]["streamtype"] == "video" else None,
+            ffmpeg_parameters=f"-ss {played} -to {duration}"
         )
+
         if str(db[chat_id][0]["file"]) == str(file_path):
             for assistant in assistants:
                 try:
-                    await assistant.change_stream(chat_id, stream)
+                    await assistant.play(chat_id, stream)
                 except:
                     pass
         else:
@@ -232,44 +224,36 @@ class Call(PyTgCalls):
 
     async def skip_stream(self, chat_id: int, link: str, video: Union[bool, str] = None, image: Union[bool, str] = None, assistant_type=None):
         assistants = await self.get_active_clients(chat_id)
-        if video:
-            stream = AudioVideoPiped(link, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-        else:
-            stream = AudioPiped(link, audio_parameters=HighQualityAudio())
+        stream = MediaStream(
+            link,
+            audio_parameters=AudioQuality.HIGH,
+            video_parameters=VideoQuality.MEDIUM if video else None
+        )
         for assistant in assistants:
             try:
-                await assistant.change_stream(chat_id, stream)
+                await assistant.play(chat_id, stream)
             except Exception as e:
                 pass
 
     async def seek_stream(self, chat_id, file_path, to_seek, duration, mode):
         assistants = await self.get_active_clients(chat_id)
-        stream = (
-            AudioVideoPiped(
-                file_path,
-                audio_parameters=HighQualityAudio(),
-                video_parameters=MediumQualityVideo(),
-                additional_ffmpeg_parameters=f"-ss {to_seek} -to {duration}",
-            )
-            if mode == "video"
-            else AudioPiped(
-                file_path,
-                audio_parameters=HighQualityAudio(),
-                additional_ffmpeg_parameters=f"-ss {to_seek} -to {duration}",
-            )
+        stream = MediaStream(
+            file_path,
+            audio_parameters=AudioQuality.HIGH,
+            video_parameters=VideoQuality.MEDIUM if mode == "video" else None,
+            ffmpeg_parameters=f"-ss {to_seek} -to {duration}"
         )
         for assistant in assistants:
             try:
-                await assistant.change_stream(chat_id, stream)
+                await assistant.play(chat_id, stream)
             except:
                 pass
 
     async def stream_call(self, link):
         assistant = await group_assistant(self, config.LOGGER_ID)
-        await assistant.join_group_call(
+        await assistant.play(
             config.LOGGER_ID,
-            AudioVideoPiped(link),
-            stream_type=StreamType().pulse_stream,
+            MediaStream(link, audio_parameters=AudioQuality.HIGH)
         )
         await asyncio.sleep(0.2)
         await assistant.leave_group_call(config.LOGGER_ID)
@@ -288,7 +272,7 @@ class Call(PyTgCalls):
             if user_id in self.custom_assistants:
                 assistant_to_join = self.custom_assistants[user_id]
             else:
-                assistant_to_join = PyTgCalls(userbot, cache_duration=100)
+                assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
                 @assistant_to_join.on_stream_end()
                 async def stream_end_handler(client, update: Update):
@@ -307,23 +291,25 @@ class Call(PyTgCalls):
             self.active_clients[chat_id] = []
         if assistant_to_join not in self.active_clients[chat_id]:
             self.active_clients[chat_id].append(assistant_to_join)
+            
         language = await get_lang(chat_id)
         _ = get_string(language)
-        if video:
-            stream = AudioVideoPiped(link, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-        else:
-            stream = (
-                AudioVideoPiped(link, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-                if video else AudioPiped(link, audio_parameters=HighQualityAudio())
-            )
+        
+        stream = MediaStream(
+            link,
+            audio_parameters=AudioQuality.HIGH,
+            video_parameters=VideoQuality.MEDIUM if video else None
+        )
+        
         try:
-            await assistant_to_join.join_group_call(chat_id, stream, stream_type=StreamType().pulse_stream)
+            await assistant_to_join.play(chat_id, stream)
         except NoActiveGroupCall:
             raise AssistantErr(_["call_8"])
         except AlreadyJoinedError:
             raise AssistantErr(_["call_9"])
         except TelegramServerError:
             raise AssistantErr(_["call_10"])
+            
         await add_active_chat(chat_id)
         await music_on(chat_id)
         if video:
@@ -422,7 +408,6 @@ class Call(PyTgCalls):
                                     vidid = entry.get("id")
                                     if not vidid or vidid == last_vidid: continue
                                     
-                                    # FLOAT TYPE FIX
                                     raw_dur = entry.get("duration", 0)
                                     try:
                                         dur_sec = int(float(raw_dur)) if raw_dur else 0
@@ -531,10 +516,11 @@ class Call(PyTgCalls):
             if "live_" in queued:
                 n, link = await YouTube.video(videoid, True)
                 if n == 0: return await chat_client.send_message(original_chat_id, text=_["call_6"])
-                if video: stream = AudioVideoPiped(link, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-                else: stream = AudioPiped(link, audio_parameters=HighQualityAudio())
-                try: await client.change_stream(chat_id, stream)
+                
+                stream = MediaStream(link, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                try: await client.play(chat_id, stream)
                 except Exception: return await chat_client.send_message(original_chat_id, text=_["call_6"])
+                
                 button = telegram_markup(_, chat_id)
                 img = get_random_img(config.STREAM_IMG_URL)
                 run = await chat_client.send_photo(
@@ -561,10 +547,9 @@ class Call(PyTgCalls):
                     except Exception: pass
                     return await self.change_stream(client, chat_id)
 
-                if video: stream = AudioVideoPiped(file_path, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-                else: stream = AudioPiped(file_path, audio_parameters=HighQualityAudio())
+                stream = MediaStream(file_path, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
                 
-                try: await client.change_stream(chat_id, stream)
+                try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
                 img = await get_thumb(videoid, user_id, chat_client)
@@ -582,8 +567,8 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "stream"
                 
             elif "index_" in queued:
-                stream = (AudioVideoPiped(videoid, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo()) if video else AudioPiped(videoid, audio_parameters=HighQualityAudio()))
-                try: await client.change_stream(chat_id, stream)
+                stream = MediaStream(videoid, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 button = telegram_markup(_, chat_id)
                 run = await chat_client.send_photo(
@@ -594,9 +579,8 @@ class Call(PyTgCalls):
                 db[chat_id][0]["markup"] = "tg"
                 
             else:
-                if video: stream = AudioVideoPiped(queued, audio_parameters=HighQualityAudio(), video_parameters=MediumQualityVideo())
-                else: stream = AudioPiped(queued, audio_parameters=HighQualityAudio())
-                try: await client.change_stream(chat_id, stream)
+                stream = MediaStream(queued, audio_parameters=AudioQuality.HIGH, video_parameters=VideoQuality.MEDIUM if video else None)
+                try: await client.play(chat_id, stream)
                 except: return await chat_client.send_message(original_chat_id, text=_["call_6"])
                 
                 if videoid == "telegram":
