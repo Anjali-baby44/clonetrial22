@@ -24,6 +24,7 @@ from PritiMusic.utils.inline import (
     playlist_markup,
     slider_markup,
     track_markup,
+    vplay_quality_markup, # 🟢 Quality buttons imported here
 )
 from PritiMusic.utils.logger import play_logs
 from PritiMusic.utils.stream.stream import stream
@@ -1004,3 +1005,86 @@ async def slider_queries(client, CallbackQuery, _):
             media=InputMediaPhoto(media=thumbnail, caption=_["play_10"].format(title.title(), duration_min)),
             reply_markup=InlineKeyboardMarkup(buttons)
         )
+
+
+# 🟢 NEW: QUALITY SELECTION HANDLERS 🟢
+@app.on_callback_query(filters.regex("VidSelect") & ~BANNED_USERS)
+@languageCB
+async def vid_select_quality(client, CallbackQuery, _):
+    callback_data = CallbackQuery.data.strip()
+    callback_request = callback_data.split(None, 1)[1]
+    vidid, user_id, mode, channel, fplay = callback_request.split("|")
+    
+    if CallbackQuery.from_user.id != int(user_id):
+        try:
+            return await CallbackQuery.answer(_["playcb_1"], show_alert=True)
+        except:
+            return
+    
+    try:
+        await CallbackQuery.answer("Please select Video Quality...", show_alert=False)
+    except:
+        pass
+        
+    buttons = vplay_quality_markup(_, vidid, user_id, channel, fplay)
+    
+    await CallbackQuery.edit_message_reply_markup(
+        reply_markup=InlineKeyboardMarkup(buttons)
+    )
+
+@app.on_callback_query(filters.regex("VPlay") & ~BANNED_USERS)
+@languageCB
+async def final_vplay_stream(client, CallbackQuery, _):
+    callback_data = CallbackQuery.data.strip()
+    callback_request = callback_data.split(None, 1)[1]
+    vidid, user_id, quality, channel, fplay = callback_request.split("|")
+    
+    if CallbackQuery.from_user.id != int(user_id):
+        try:
+            return await CallbackQuery.answer(_["playcb_1"], show_alert=True)
+        except:
+            return
+
+    try:
+        await CallbackQuery.answer()
+        await CallbackQuery.message.delete()
+    except:
+        pass
+
+    mystic = await CallbackQuery.message.reply_text(f"» ᴘʀᴏᴄᴇssɪɴɢ ᴠɪᴅᴇᴏ ǫᴜᴀʟɪᴛʏ ({quality}p)...")
+    
+    try:
+        chat_id, channel_id = await get_channeplayCB(_, channel, CallbackQuery)
+    except:
+        return
+
+    user_name = CallbackQuery.from_user.first_name
+    
+    try:
+        details, track_id = await YouTube.track(vidid, True)
+    except:
+        return await mystic.edit_text(_["play_3"])
+        
+    ffplay = True if fplay == "f" else None
+    video_quality = int(quality)
+    
+    try:
+        await stream(
+            _,
+            mystic,
+            CallbackQuery.from_user.id,
+            details,
+            chat_id,
+            user_name,
+            CallbackQuery.message.chat.id,
+            video=video_quality,
+            streamtype="youtube",
+            forceplay=ffplay,
+        )
+    except Exception as e:
+        ex_type = type(e).__name__
+        if ex_type == "AssistantErr":
+            err = e 
+        else:
+            err = _["general_2"].format(ex_type)
+        return await mystic.edit_text(err)
