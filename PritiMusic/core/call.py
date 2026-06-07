@@ -10,7 +10,6 @@ from pyrogram.types import InlineKeyboardMarkup
 from pyrogram.enums import ParseMode
 
 # === NEW PYTGCALLS (v2.x/v3.x) IMPORTS ===
-# 🛑 Removed 'filters' because of PyTgCalls internal bug
 from pytgcalls import PyTgCalls
 from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
@@ -167,6 +166,7 @@ class Call(PyTgCalls):
             except:
                 pass
 
+    # ✅ FIXED: Changed 'leave_group_call' to 'leave' for PyTgCalls v2.x/v3.x
     async def stop_stream(self, chat_id: int, assistant_type=None):
         LOGGER(__name__).info(f"Stopping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
@@ -176,18 +176,19 @@ class Call(PyTgCalls):
             pass
         for assistant in assistants:
             try:
-                await assistant.leave_group_call(chat_id)
+                await assistant.leave(chat_id)
             except Exception as e:
                 LOGGER(__name__).error(f"Error stopping stream in chat {chat_id}: {e}")
         if chat_id in self.active_clients:
             del self.active_clients[chat_id]
 
+    # ✅ FIXED: Changed 'leave_group_call' to 'leave'
     async def stop_stream_force(self, chat_id: int):
         LOGGER(__name__).info(f"Force stopping stream for chat: {chat_id}")
         assistants = await self.get_active_clients(chat_id)
         for assistant in assistants:
             try:
-                await assistant.leave_group_call(chat_id)
+                await assistant.leave(chat_id)
             except:
                 pass
         if chat_id in self.active_clients:
@@ -275,11 +276,12 @@ class Call(PyTgCalls):
             except:
                 pass
 
+    # ✅ FIXED: Changed 'leave_group_call' to 'leave'
     async def stream_call(self, link):
         assistant = await group_assistant(self, config.LOGGER_ID)
         await self._play_safe(assistant, config.LOGGER_ID, link, False)
         await asyncio.sleep(0.2)
-        await assistant.leave_group_call(config.LOGGER_ID)
+        await assistant.leave(config.LOGGER_ID)
 
     async def join_call(self, chat_id: int, original_chat_id: int, link, video: Union[bool, str] = None, image: Union[bool, str] = None, userbot=None):
         assistant_to_join = None
@@ -298,7 +300,7 @@ class Call(PyTgCalls):
                 assistant_to_join = PyTgCalls(userbot)
                 await assistant_to_join.start()
                 
-                # 🛑 MANUAL FILTER: PyTgCalls ka internal bug bypass karne ke liye
+                # 🛑 MANUAL UPDATE FILTER FOR v2.x SYSTEM
                 @assistant_to_join.on_update()
                 async def stream_end_handler(client, update: Update):
                     update_name = type(update).__name__
@@ -339,6 +341,7 @@ class Call(PyTgCalls):
             except:
                 pass
 
+    # ✅ FIXED: Changed 'leave_group_call' to 'leave'
     async def change_stream(self, client, chat_id):
         check = db.get(chat_id)
         popped = None
@@ -492,13 +495,13 @@ class Call(PyTgCalls):
             if not db.get(chat_id): 
                 await _clear_(chat_id)
                 if chat_id in self.active_clients: del self.active_clients[chat_id]
-                return await client.leave_group_call(chat_id)
+                return await client.leave(chat_id)
             
         except:
             try:
                 await _clear_(chat_id)
                 if chat_id in self.active_clients: del self.active_clients[chat_id]
-                return await client.leave_group_call(chat_id)
+                return await client.leave(chat_id)
             except:
                 return
         else:
@@ -634,7 +637,7 @@ class Call(PyTgCalls):
         if config.STRING1: await self.one.start()
 
     async def decorators(self):
-        # 🛑 MANUAL FILTER: PyTgCalls ka internal bug bypass karne ke liye
+        # 🛑 MANUAL UPDATE FILTER
         @self.one.on_update()
         async def stream_end_handler1(client, update: Update):
             update_name = type(update).__name__
