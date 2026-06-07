@@ -11,11 +11,7 @@ from pyrogram.enums import ParseMode
 
 # === NEW PYTGCALLS (v2.x) IMPORTS ===
 from pytgcalls import PyTgCalls
-from pytgcalls.exceptions import (
-    AlreadyJoinedError,
-    NoActiveGroupCall,
-    TelegramServerError,
-)
+from pytgcalls.exceptions import NoActiveGroupCall
 from pytgcalls.types import Update, MediaStream, AudioQuality, VideoQuality
 from pytgcalls.types.stream import StreamAudioEnded
 
@@ -318,10 +314,9 @@ class Call(PyTgCalls):
             await assistant_to_join.play(chat_id, stream)
         except NoActiveGroupCall:
             raise AssistantErr(_["call_8"])
-        except AlreadyJoinedError:
-            raise AssistantErr(_["call_9"])
-        except TelegramServerError:
-            raise AssistantErr(_["call_10"])
+        except Exception as e:
+            # ✅ Saare naye py-tgcalls errors yahan handle ho jayenge bina bot ko crash kiye
+            raise AssistantErr(f"Voice Chat Error: {str(e)}")
             
         await add_active_chat(chat_id)
         await music_on(chat_id)
