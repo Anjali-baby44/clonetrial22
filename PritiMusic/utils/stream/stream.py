@@ -24,11 +24,14 @@ def get_random_img(img_list):
 
 async def stream(
     _, mystic, user_id, result, chat_id, user_name, original_chat_id,
-    video: Union[bool, str] = None, streamtype: Union[bool, str] = None,
+    video: Union[bool, int] = None, streamtype: Union[bool, str] = None,
     spotify: Union[bool, str] = None, forceplay: Union[bool, str] = None,
 ):
     if not result: return
     if forceplay: await Lucky.stop_stream(chat_id)
+
+    # Status pass karte hain (True/False ya quality integer)
+    status = video if video else None
 
     if streamtype == "playlist":
         msg = f"{_['play_19']}\n\n"
@@ -47,7 +50,6 @@ async def stream(
                 msg += f"{count}. {title[:70]}\n{_['play_20']} {position}\n\n"
             else:
                 if not forceplay: db[chat_id] = []
-                status = True if video else None
                 file_path, direct = await YouTube.download(vidid, mystic, video=status, videoid=True)
                 if not file_path or str(file_path) == "None": raise AssistantErr(_["play_14"])
                 await Lucky.join_call(chat_id, original_chat_id, file_path, video=status, image=thumbnail)
@@ -68,7 +70,6 @@ async def stream(
 
     elif streamtype == "youtube":
         link, vidid, title, duration_min, thumbnail = result["link"], result["vidid"], (result["title"]).title(), result["duration_min"], result["thumb"]
-        status = True if video else None
         file_path, direct = await YouTube.download(vidid, mystic, videoid=True, video=status)
         if not file_path or str(file_path) == "None": raise AssistantErr(_["play_14"])
         
@@ -90,7 +91,6 @@ async def stream(
 
     elif streamtype == "live":
         link, vidid, title, thumbnail = result["link"], result["vidid"], (result["title"]).title(), result["thumb"]
-        status = True if video else None
         if await is_active_chat(chat_id):
             await put_queue(chat_id, original_chat_id, f"live_{vidid}", title, "Live", user_name, vidid, user_id, "video" if video else "audio")
             position = len(db.get(chat_id)) - 1
