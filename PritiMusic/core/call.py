@@ -42,15 +42,30 @@ from strings import get_string
 from PritiMusic.utils.thumbnails import get_thumb
 
 # ==========================================
-# 🛑 GLOBAL ERROR BYPASS FOR CLONES
+# 🛑 SMART ERROR LOGGER FOR CLONES
 # ==========================================
 def handle_asyncio_exceptions(loop, context):
     msg = context.get("exception", context.get("message"))
     msg_str = str(msg)
+    
+    # In common errors ko ignore karega taaki bot hang na ho
     if "GROUPCALL_FORBIDDEN" in msg_str or "SetVideoCallStatus" in msg_str or "GROUPCALL_INVALID" in msg_str:
         pass 
     else:
         logging.getLogger("asyncio").error(f"Unhandled Asyncio Error: {msg}")
+        
+        # 🟢 YAHAN SE ERROR LOGGER GROUP MEIN JAYEGA 🟢
+        from PritiMusic import app
+        import config
+        try:
+            error_text = (
+                f"⚠️ **Bot Error Alert** ⚠️\n\n"
+                f"**Type:** `Asyncio/PyTgCalls Error`\n"
+                f"**Details:**\n`{msg_str}`"
+            )
+            loop.create_task(app.send_message(config.LOGGER_ID, error_text))
+        except Exception:
+            pass
 
 try:
     loop = asyncio.get_event_loop()
@@ -88,7 +103,6 @@ class Call(PyTgCalls):
             api_hash=config.API_HASH,
             session_string=str(config.STRING1),
         )
-        # Naya init tarika: No cache_duration
         self.one = PyTgCalls(self.userbot1)
         self.custom_assistants = {} 
         self.active_clients = {} 
@@ -195,7 +209,6 @@ class Call(PyTgCalls):
         played, con_seconds = speed_converter(playing[0]["played"], speed)
         duration = seconds_to_min(dur)
         
-        # New MediaStream usage
         stream = MediaStream(
             out,
             audio_parameters=AudioQuality.HIGH,
@@ -335,7 +348,7 @@ class Call(PyTgCalls):
                 await set_loop(chat_id, loop)
             await auto_clean(popped)
             
-            # ⬇️ --- VIVAAN DUAL-FALLBACK AUTOPLAY LOGIC --- ⬇️
+            # ⬇️ --- DUAL-FALLBACK AUTOPLAY LOGIC --- ⬇️
             if not check:
                 from PritiMusic.utils.database.autoplay import is_autoplay_group
                 auto_on = await is_autoplay_group(chat_id)
@@ -345,7 +358,6 @@ class Call(PyTgCalls):
                     title_lower = str(raw_title).lower()
                     last_vidid = str(popped.get("vidid") or "")
 
-                    # Phase 1: Smart Language Autoplay
                     try:
                         lang_pools = {
                             "Hindi": ["hindi single track official video", "bollywood latest lyrical song"],
@@ -373,7 +385,6 @@ class Call(PyTgCalls):
                         search_query = random.choice(lang_pools[detected_lang])
                         valid_choices = []
 
-                        # Primary: youtubesearchpython
                         try:
                             from youtubesearchpython.__future__ import VideosSearch
                             search = VideosSearch(search_query, limit=15)
@@ -396,7 +407,6 @@ class Call(PyTgCalls):
                         except Exception:
                             pass 
 
-                        # Fallback: yt-dlp 
                         if not valid_choices:
                             import yt_dlp
                             loop_e = asyncio.get_event_loop()
@@ -450,7 +460,6 @@ class Call(PyTgCalls):
                     except Exception as e:
                         LOGGER(__name__).warning(f"Smart Autoplay Error: {e}")
 
-                    # Phase 2: Native YouTube API Fallback 
                     if not success:
                         try:
                             recommendation = await YouTube.autoplay(
